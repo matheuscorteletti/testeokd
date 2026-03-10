@@ -1,0 +1,44 @@
+# Utilizando a imagem oficial do JWS 5.x (Tomcat 9) com Java 8
+FROM registry.redhat.io/jboss-webserver-5/jws57-openjdk8-openshift-rhel8:latest
+
+# Metadados para boas práticas
+LABEL maintainer="Equipe de Dev" \
+      summary="Aplicação Legada Tomcat 9 no OpenShift"
+
+# 1. Definição de Variáveis de Ambiente
+ENV TOMCAT_DIR=/opt/jws-5.7/tomcat \
+    WEBRUN_SYSTEMS=/home/jboss/softwell/webrun/systems \
+    JWS_HOME=/opt/jws-5.7
+
+USER root
+
+# 2. Preparação do Driver JDBC SQL Server
+# Certifique-se de que o mssql-jdbc.jar esteja no mesmo diretório do Dockerfile
+COPY mssql-jdbc-*.jar ${TOMCAT_DIR}/lib/
+
+# 3. Criação da estrutura de diretórios e permissões para OpenShift
+# O OpenShift roda com um UID aleatório, por isso o grupo 0 (root) precisa de permissão
+RUN mkdir -p ${WEBRUN_SYSTEMS} && \
+    chown -R 185:0 ${WEBRUN_SYSTEMS} && \
+    chmod -R g+rwX ${WEBRUN_SYSTEMS}
+
+# 4. Deploy dos artefatos
+# Removendo a ROOT padrão (opcional) para evitar conflitos
+RUN rm -rf ${TOMCAT_DIR}/webapps/ROOT*
+
+COPY ROOT.war ${TOMCAT_DIR}/webapps/
+COPY CONSIGLOG_API.wfre ${WEBRUN_SYSTEMS}/
+COPY CONSIGLOG_API.jar ${WEBRUN_SYSTEMS}/
+
+# Ajuste final de permissões nos arquivos adicionados
+RUN chown -R 185:0 ${TOMCAT_DIR}/webapps/ ${WEBRUN_SYSTEMS}
+
+# Voltar para o usuário padrão do JWS (segurança)
+USER 185
+
+# Expor a porta padrão do Tomcat no JWS
+EXPOSE 8080
+
+# O JWS utiliza um script de entrada específico para OpenShift que configura heap, 
+# logs e variáveis dinamicamente.
+CMD ["/opt/jws-5.7/tomcat/bin/launch.sh"]
